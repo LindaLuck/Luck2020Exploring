@@ -1,0 +1,173 @@
+##########################################################################################
+##
+##  Crown area vs. DBH: quantify level of variation in crown for a given DBH
+##  Author: Linda Luck 05 Feb 2020
+##
+##########################################################################################
+
+
+### House keeping ----
+## clean workspace - ctrl+L
+rm(list=ls())
+
+## set working directory
+setwd("C:/Users/lluck/OneDrive - Charles Darwin University/PhD/Data/R scripts/PhD scripts/Allometric_relationships/")
+
+## load libraries
+#if (!require(chngpt)) install.packages('chngpt')
+library("ggplot2")
+library("car")
+library("caret")
+library("visreg")
+library("chngpt")
+library("RColorBrewer")
+
+### Load data ----
+df <- read.csv(file = "raw/Litchie_2019.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
+
+## investigate data (old school)
+head(df)
+dim(df)
+str(df)
+summary(df)
+names(df)
+
+## change DBH to cm
+df$DBHcm <- df$DBH*100
+
+
+### 1. Visualization of raw data and transform data if needed ----
+
+
+## histograms of variables
+par(mfrow=c(1,2))
+hist(df$CrownArea) # outcome value, looks skewed
+hist(df$DBHcm) # predictor
+# -> both heavily skewed
+
+## compare log to raw outcome value
+df$LOG_CrownArea <- log(df$CrownArea)
+df$LOG_DBHcm <- log(df$DBHcm)
+
+hist(df$CrownArea)
+hist(df$LOG_CrownArea) # -> looks better but need to investigate model performance with raw and log transform (below)
+hist(df$DBHcm)
+hist(df$LOG_DBHcm)
+par(mfrow=c(1,1))
+
+
+## raw data plot
+ggplot(df,aes(y=CrownArea,x=DBHcm)) + geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  #labs(title = "DBH v crown area") + 
+  xlab("DBH")+ ylab("CrownArea") # + # focus on pre change point
+scale_x_continuous(limits=c(0,15)) +
+  scale_y_continuous(limits=c(0,30))
+# -> data seems to fan out from DBH 10, could be threshold effect
+
+
+## Log plot
+ggplot(df,aes(y=LOG_CrownArea,x=DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "DBH v log transformed crown area")+ xlab("DBH")+ ylab("log CrownArea")
+# -> looks less neat
+
+
+## Log-log plot
+ggplot(df,aes(y=LOG_CrownArea,x=LOG_DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "log DBH v log transformed crown area")+ xlab("log DBH")+ ylab("log CrownArea")
+# -> doesn't look any better
+
+# -> raw plot seems to be best at highlighting the spread of crown for a given DBH, especially for trees above 10cm
+
+
+
+
+### 2. Change point analysis ----
+
+m2 <- chngptm(formula.1=CrownArea ~ 1, formula.2=~DBHcm, data = df, type="segmented", family="gaussian")
+summary(m2)
+# -> test data shows a lot of spread between lower and upper confidence interval after change point
+plot(m2)
+# MLR test whether there is a change point 
+testresult_m2 <- chngpt.test(formula.null=CrownArea~1, formula.chngpt=~DBHcm, df, type="segmented", family="gaussian")
+testresult_m2
+
+## get estimate of slope after threshold
+est_m2=lincomb(m2, comb=c(0,1,1), alpha=0.05); print(est_m2)
+
+# -> For every unit increase in DBH there is a 0.43 (95%CI 0.15 - 0.72, P < 0.001) unit increase in crown area until a change point at 10.3 cm DBH (95%CI 5.6 - 15.00)
+# -> from that change point the increase in crown area per unit DBH increases to 2.3 (95%CI 1.44 - 3.33, P < 0.001)
+
+
+
+
+### 3. Model diagnostics ----
+
+res <- residuals(m2)
+ggplot(df,aes(y=res,x=DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "residuals change point m2")+ xlab("DBHcm")+ ylab("res") 
+# -> spread of rediuals increases with DBH
+
+qqnorm(res) 
+qqline(res)
+# -> most residuals located on the line
+
+
+
+
+### 4. Log model ----
+
+m2_log <- lm(LOG_CrownArea ~ DBH, data = df)
+summary(m2_log)
+# -> P<0.001 but R2 0.54 not great
+exp(cbind(exp_coeff = coef(m2_log), confint(m2_log))) # -> for use with logged outcome (but not predictor) - exponentiates CIs
+# -> pretty big 95%CI
+
+par(mfrow=c(2,2))
+plot(m2_log)
+par(mfrow=c(1,1))
+# -> good pread of residuals; curve visible in fitted v resid though; no outliers outside Cook's distance
+
+
+
+
+### 5. Plot effect ----
+
+visreg(m2, xvar="DBH", ylab="CrownArea", points=list(cex=1))
+
+visreg(m2_log, xvar="DBH", ylab="LOG_CrownArea", points=list(cex=1))
+# -> line doesn't really explain data points
+
+
+
+### 6. Pretty plot ----
+
+## make colour pallette
+outcome <- df$TreeHeight
+label <- "Tree height (m)"
+max <- max(outcome)
+min <- min(outcome)
+require(RColorBrewer)
+myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
+sc <- scale_colour_gradientn(colours = myPalette(100), limits=c(min, max))
+
+
+### plot results
+
+ggplot(data = df, aes(y = CrownArea, x = DBHcm, colour = outcome)) + geom_point() + sc +
+  theme_light() +
+  labs(x = "DBH (cm)", y = bquote('Crown area'~(m^2)), colour = label)
+
+
+# with curve
+ggplot(data = df, aes(y = CrownArea, x = DBHcm, colour = outcome)) + geom_point() + sc +
+  stat_smooth(method = "loess") +
+  theme_light() +
+  labs(x = "DBH (cm)", y = bquote('Crown area'~(m^2)), colour = label)
