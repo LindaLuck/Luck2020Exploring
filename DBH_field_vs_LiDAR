@@ -1,0 +1,288 @@
+##########################################################################################
+##
+## COMPARE DBH FROM FIELD SURVEY AND LIDAR SCANS
+## Author: Linda Luck 04 Feb 2020
+##
+##########################################################################################
+
+
+### House keeping ----
+## clean workspace
+rm(list=ls())
+
+## set working directory
+setwd("C:/Users/lluck/OneDrive - Charles Darwin University/PhD/Data/R scripts/PhD scripts/Allometric_relationships/")
+
+## load libraries
+#if (!require(ggplot2)) install.packages('ggplot2')
+library("ggplot2")
+library("car")
+library("visreg")
+
+
+### load data ----
+df <- read.csv(file = "raw/survey_match.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
+
+## investigate data (old school)
+head(df)
+dim(df)
+str(df)
+summary(df)
+names(df)
+
+## prepare data
+df$DBH.1 <- as.numeric(as.character(df$DBH.1))
+df$DBH.2 <- as.numeric(as.character(df$DBH.2))
+
+## change DBH to cm
+df$DBHcm <- df$DBH*100
+
+## remove NA value
+df <- df[-(377),] 
+
+
+### 1. Visualization of raw data and transform data if needed ----
+
+## raw data plot with /without separating by species
+ggplot(df,aes(y=DBH.1,x=DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "Field v. LiDAR DBH for each species untransformed")+ xlab("LiDAR DBH")+ ylab("field DBH")+
+  facet_wrap(~Species.ID)
+
+ggplot(df,aes(y=DBH.1,x=DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='lm') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "Field v. LiDAR DBH untransformed")+ xlab("LiDAR DBH")+ ylab("field DBH")
+
+
+## histograms of variables
+hist(df$DBHcm) # -> bit skewed but not too bad
+
+hist(df$DBH.1) # -> right skewed - might log transform?
+df$LOG_DBH.1 <- log(df$DBH.1)
+hist(df$LOG_DBH.1) # -> bit better but not much; still need to investigate model performance with raw and log transform (below)
+
+## relationship btw log DBH field and scanner -> not really better
+ggplot(df,aes(y=LOG_DBH.1,x=DBHcm))+ geom_point(color='blue') +
+  geom_smooth(method='lm') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "test log-transform of skewed field DBH")+ xlab("LiDAR DBH")+ ylab("field DBH") 
+# -> points now arch and don't align as well to the line
+# -> doesn't explain data well
+# -> raw fit might be better, even though skewed outcome
+
+
+### 2. Summary statistics ----
+
+## nonparametric Spearman correlations based on ranks
+cor.test(df$DBH.1,df$DBHcm, use="complete.obs", method="spearman") 
+# -> highly significant p-value, rho (correlation coefficient) close to +1 indicates strong positive correlation
+
+
+### 3. Regression model ----
+
+# do we need to account for any other factors e.g. species?
+# any spatial or temporal autocorrelations? (e.g. plot 1 or 2, pre/ post fire)
+
+## model of non-log DBHfield 
+m1 <- lm(DBH.1 ~ DBHcm, data=df) 
+summary(m1)
+# Coefficients:
+#              Estimate Std. Error t value  Pr(>|t|)    
+# DBHcm    0.99011    0.05044  19.631   <2e-16 ***
+# -> coefficient estimate (1st column) means that for every 1 unit increase in DBHcm there is an average 0.99 unit increase in the DHBfield
+confint(m1) # 95% CI indicates better fit for non-log model
+#              2.5 %     97.5 %
+# DBHcm    0.8888073 1.091417
+# -> above means that for every unit increase in the DBHcm we are 95% confident that the increase is between 0.88 and 1.09 units in the DBHfield
+# -> in the above raw data model, the increase is additive, while for the log/exp model below the increase is %
+# -> To decide also compare fits (scatter plots and model fits) - at first glace (section 1) raw data model makes more sense
+
+## model of log DBHfield - try log transformed though above indicates might not be best fit
+m1_log <- lm(LOG_DBH.1 ~ DBHcm, data=df) 
+confint(m1_log)
+# -> outcome log transformed, need to exponeniate the coefficient and interpret change as multiplicative 
+exp(cbind(exp_coeff = coef(m1_log), confint(m1_log)))
+#              exp_coeff   2.5 %    97.5 %
+# DBHcm    1.067312		 1.057768 1.076942
+# -> above means that for every unit increase in DBHcm, there is an average 6.7% increase in DBH 
+# -> "95%CI 5.8 to 7.7%" means that we are 95% confident that the increase is btw 5.8 and 7.7%
+# -> this interpretation does not really make sense and likely better to continue with non-log data but check residuals
+
+
+### 4. Model diagnostics https://www.statmethods.net/stats/rdiagnostics.html ----
+
+
+# check for a potential serial autocorrelation e.g. spatial or temporal autocorrelation?
+# in this case only use if records are spatially related, i.e. if consecutive tree numbers are likely to be situated close to each other (or X+Y)
+df_acf <- df_OR
+df_acf$XY <- df_acf$TreeLocationX*df_acf$TreeLocationY
+library("tidyverse")
+df_acf %>% arrange(XY) # re-order rows according to location
+ggplot(df_acf, aes(x = TreeLocationX, y = TreeLocationY, color = XY)) + geom_point() + scale_color_gradientn(colours = rainbow(5)) + coord_fixed() # plot to check spatial gradient
+m1_acf <- lm(DBH.1 ~ DBHcm, data=df_acf) # redo choson model with ordered data
+par(mfrow=c(1,2))
+acf(resid(m1_acf), main="autocorrelation")
+# -> some spikes poking out of dotted line
+acf(resid(m1_acf),800)
+par(mfrow=c(1,1))
+# -> looking at entire data set, majority seems to be within dotted line
+
+
+par(mfrow=c(2,2))
+plot(m1) # two influential outliers spotted (way outside cooks distance). removing both
+plot(m1_log)
+par(mfrow=c(1,1))
+# -> distribution of residuals appears less structured in non-log model - non-log model performs better?
+
+
+# check for random pattern of residuals across fitted values (should be evenly distributed with no obvious patterns)
+# check for no outliers or overly influential observations with a lot of leverage and high Cooks distance
+
+### 4.a Remove influential outliers (433, 147) ----
+
+df_OR <- df
+df_OR <- df_OR[-(432),] # go one previous because 377 removed earlier
+df_OR <- df_OR[-(147),] # approx 20 cm difference between manual and LiDAR
+
+m1_OR <- lm(DBH.1 ~ DBHcm, data=df_OR)
+summary(m1_OR)
+confint(m1_OR)
+summary(m1)
+confint(m1)
+par(mfrow=c(2,2))
+plot(m1_OR)
+par(mfrow=c(1,1))
+# -> CI reduced by removing outliers, not further influential outliers spotted
+m1_log_OR <- lm(LOG_DBH.1 ~ DBHcm, data=df_OR) 
+summary(m1_log_OR)
+confint(m1_log_OR)
+summary(m1_log)
+confint(m1_log)
+par(mfrow=c(2,2))
+plot(m1_log_OR)
+plot(m1_log)
+par(mfrow=c(1,1))
+
+
+
+
+### 5. Plot effect ----
+
+## visreg similar to ggplot regression but using established model
+par(mfrow=c(2,2))
+visreg(m1, xvar="DBHcm", ylab="DBH.1", points=list(cex=1))
+visreg(m1_OR, xvar="DBHcm", ylab="DBH.1", points=list(cex=1)) 
+visreg(m1_log, xvar="DBHcm", ylab="DBH.1", points=list(cex=1))
+visreg(m1_log_OR, xvar="DBHcm", ylab="DBH.1", points=list(cex=1)) # visreg automatic - but does not backtransform from log transformed outcome (below)
+par(mfrow=c(1,1))
+# -> log models still not looking better
+
+### to backtransform - need to do yourself (only necessary when comparing to log-transformed model)
+# Generate new dataset which contains the explanatory variables you have in the lm()
+preddata <- with(df_OR, 
+                 data.frame(DBHcm = seq(min(DBHcm), max(DBHcm), length = 200))
+)
+head(preddata) # = randomly generated data set within minimum and maximum values of original data set and predetermined lentgh
+
+## Log transformed m1_log model
+# calculate the lower and upper 95% CI based on predictions
+preds_log <- predict(m1_log_OR, newdata = preddata, se.fit = TRUE)
+critval <- 1.96 ## approx 95% CI
+upr_log <- preds_log$fit + (critval * preds_log$se.fit)
+lwr_log <- preds_log$fit - (critval * preds_log$se.fit)
+fit_log <- preds_log$fit
+# exp estimated DBH.1 to backtransform from log
+exp_preds <- exp(fit_log)
+exp_upr <- exp(upr_log)
+exp_lwr <- exp(lwr_log)
+# combine to dataset
+preddata_m1_log <- data.frame(DBHcm=preddata$DBHcm, fitlog=exp_preds, lowerlog=exp_lwr, upperlog=exp_upr)
+
+## Generate dataset for 2nd model m1 with no log transform
+preds <- predict(m1_OR, newdata = preddata, se.fit = TRUE)
+critval <- 1.96 ## approx 95% CI
+upr <- preds$fit + (critval * preds$se.fit)
+lwr <- preds$fit - (critval * preds$se.fit)
+fit <- preds$fit
+preddata_m1 <- data.frame(DBHcm=preddata$DBHcm, fit=fit, lower=lwr, upper=upr)
+
+## plot to compare model fit - raw / log
+ggplot(aes(x=DBHcm, y=fit), data=preddata_m1) +
+  geom_line(size=1.5, color="blue") +
+  geom_ribbon(data=preddata_m1,aes(ymin=lower,ymax=upper),alpha=0.3, fill="blue")+
+  labs(x="DBH LiDAR", y="fitted DBH field") + theme_bw() +
+  geom_point(aes(x=DBHcm, y=DBH.1), data=df, size=2) +
+  geom_line(aes(x=DBHcm, y=fitlog), data=preddata_m1_log, size=1.5) +
+  geom_ribbon(data=preddata_m1_log,aes(ymin=lowerlog,ymax=upperlog),alpha=0.3)
+# -> linear fit better fit compared to log
+
+
+# ## plot to compare model fit - w / w-out outlier
+# ggplot(aes(x=DBHcm, y=fit), data=preddata_m1) +
+#   geom_line(size=1.5, color="blue") +
+#   geom_ribbon(data=preddata_m1,aes(ymin=lower,ymax=upper),alpha=0.3, fill="blue")+
+#   labs(x="DBH LiDAR", y="fitted DBH field") + theme_bw() +
+#   geom_point(aes(x=DBHcm, y=DBH.1), data=df_OR, size=2)# +
+#   geom_line(aes(x=DBHcm, y=fit), data=preddata_m1, size=1.5) +
+#   geom_ribbon(data=preddata_m1,aes(ymin=lower,ymax=upper),alpha=0.3)
+# # -> linear fit better fit compared to log
+
+
+#### 6. Pretty plot ----
+
+
+### try k-fold model to extract errors
+library(caret)
+  
+### resample data
+set.seed(123)
+train.control <- trainControl(method = "repeatedcv", 
+                                number = 10, repeats = 3)
+  
+### Train the model
+
+set.seed(123)
+m1_k <- train(DBH.1 ~ DBHcm, data = df_OR, method = "lm",
+                        trControl = train.control)
+  
+## check difference
+  
+summary(m1_k)
+summary(m1_OR) # compare to normal model, results should be identical
+  
+  
+### export model performance
+  
+summary_m1_k <- print(m1_k)
+  
+R2_m1 <- as.numeric(summary_m1_k[[2]])
+lab_m1 <- paste("R2 = ", format(round(R2_m1, 2), nsmall = 2))
+RMSE_m1 <- as.numeric(summary_m1_k[[1]])
+lab_RMSE_m1 <- paste("RMSE = ", format(round(RMSE_m1, 2), nsmall = 2), "cm")
+MAE_m1 <- as.numeric(summary_m1_k[[3]])
+lab_MAE_m1 <- paste("MAE = ", format(round(MAE_m1, 2), nsmall = 2), "cm")
+
+lab_m1 <- paste(lab_m1,lab_RMSE_m1,lab_MAE_m1, sep = "\n")
+
+
+
+
+### plot results
+
+ggplot(data = preddata_m1, aes(x = DBHcm, y = fit)) +
+  geom_point(aes(x=DBHcm, y=DBH.1), data=df_OR, alpha = 0.5) +
+  geom_line(aes(x=DBHcm, y=fit), data=preddata_m1, size=0.5, color="blue") +
+  geom_ribbon(data=preddata_m1,aes(ymin=lower,ymax=upper),alpha=0.3, fill="blue") +
+  annotate(geom = "text", x = min(preddata_m1$DBHcm), y = max(preddata_m1$fit), 
+           label = lab_m1, hjust = 0, vjust = 1, lineheight = 1) +
+  #ggtitle("pretty plot") +
+  labs(x="DBH LiDAR (cm)", y="Fitted DBH field (cm)") +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  theme(panel.border = element_blank()) +
+  theme(axis.line.x = element_line(color="black", size = 0.5),
+        axis.line.y = element_line(color="black", size = 0.5)) #+
+  scale_x_continuous(limits=c(0,15)) +
+  scale_y_continuous(limits=c(0,15))
