@@ -84,7 +84,7 @@ hist_LiDAR18 <- ggplot(data = df_LiDAR18, aes(x = DBH, fill = cut(DBH, breaks = 
 
 
 
-### Produce grid plot ----
+# Produce grid plot ----
 
 multiplot <- ggarrange(map_manual18,map_LiDAR18, 
                         hist_manual18, hist_LiDAR18, 
