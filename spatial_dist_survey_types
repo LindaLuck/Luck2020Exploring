@@ -1,6 +1,6 @@
 ##########################################################################################
 ##
-## PLOTING AND COMPARING DBH RANGE AND DISTRIBUTION CAPTURED BY DIFFERENT SURVEY METHODS
+## PLOTING AND COMPARING DBH RANGE AND DISTRIBUTION CAPTURED IN MANUAL AND TLS SURVEY
 ## Author: Linda Luck 21 Jan 2020
 ##
 ##########################################################################################
@@ -11,101 +11,92 @@
 rm(list=ls())
 
 ### set working directory
-setwd("C:/Users/lluck/OneDrive - Charles Darwin University/PhD/Data/R scripts/PhD scripts/Allometric_relationships/")
+setwd(dir)
 
 ### load libraries
 if (!require(ggplot2)) install.packages('ggplot2')
 if (!require(gridExtra)) install.packages('gridExtra')
 if (!require(ggpubr)) install.packages('ggpubr')
 
-### load data ----
+
+### load data
 df_manual18 <- read.csv("raw/field_2018.csv")
-df_LiDAR19 <- read.csv("raw/Litchie_LiDAR_2019_rotated.csv")
+df_LiDAR18 <- read.csv("raw/Litchie_LiDAR_2018.csv")
 
-### prepare data
-## convert DBH to cm
-df_LiDAR19$DBHcm <- df_LiDAR19$DBH*100
+## convert DBH units
+df_manual18$DBHm <- df_manual18$DBH/100
 
-## remove weird manual outlier
-#df_manual18_RM <- df_manual18[-(115),]
-df_manual18_RM <- subset(df_manual18, DBH != 77.30)
-summary(df_manual18_RM)
-
-## remove NW extra trees
-df_LiDAR19s <- subset(df_LiDAR19, TreeID != 1115)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 1074)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 1127)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 1090)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 1082)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 1093)
-df_LiDAR19s <- subset(df_LiDAR19s, TreeID != 2047)
-
-### explore data# 
-# hist(df_LiDAR19$AGB)
-# hist(df_manual18$AGB)
-# sum(df_LiDAR19$AGB)
-# sum(df_manual18$AGB)
+## remove outliers
+df_manual18_RM <- subset(df_manual18, DBH != 77.30) # manual outlier, transcription error
+df_LiDAR18_RM <- subset(df_LiDAR18, TreeID != 23) # remove corresponding tree
 
 
-### plot data ----
 
-## scatter plot ____
+# Produce plot maps ----
 
 map_manual18 <- ggplot(data = df_manual18_RM, aes(x = Easting, y = Northing)) + 
+  geom_point(aes(size = DBHm),alpha = 0.5) +
+  scale_size(range = c(0-1, 4.5), name = "DBH (m)", breaks = c(0.1,0.2,0.3,0.4)) +
+  theme_classic() +
+  labs(title = "Manual survey")+
+  theme(aspect.ratio=1,
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank())
+
+
+map_LiDAR18 <- ggplot(data = df_LiDAR18_RM, aes(x = TreeLocationX, y = TreeLocationY, colour = cut(DBH, breaks = c(0,0.049,Inf)))) + 
   geom_point(aes(size = DBH),alpha = 0.5) +
-  scale_size(range = c(0, 5), name = "DBH (cm)") +
+  scale_size(range = c(0-1, 4.5), name = "DBH (m)", breaks = c(10,20,30,40)) +
   theme_classic() +
-  labs(title = "Manual survey plot 1 2018")+
+  labs(title = "TLS survey")+
   theme(aspect.ratio=1,
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),
         axis.text.x = element_blank(),
         axis.text.y = element_blank(),
-        axis.ticks = element_blank())
-        
-
-map_LiDAR19 <- ggplot(data = df_LiDAR19s, aes(x = TreeLocationX, y = TreeLocationY)) + 
-  geom_point(aes(size = DBHcm),alpha = 0.5) +
-  scale_size(range = c(0, 5), name = "DBH (cm)") +
-  theme_classic() +
-  labs(title = "LiDAR survey plot 1 2019")+
-  theme(aspect.ratio=1,
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks = element_blank())
+        axis.ticks = element_blank()) +
+  scale_colour_manual(name = "Colour",
+                      values = c("red", "grey3"),
+                      labels = c("< 0.05 m", "\u2265 0.05 m"))
 
 
-## histogram ____
 
-hist_manual18 <- ggplot(data = df_manual18_RM, aes(x = DBH)) + geom_histogram(bins = 100) +
+# Produce histogram ----
+
+hist_manual18 <- ggplot(data = df_manual18_RM, aes(x = DBHm)) + geom_histogram(bins = 100) +
   theme_classic()+
-  labs(title = "Histogram (n = 492)",
-       x = "DBH (cm)", y = "Frequency") +
-  scale_x_continuous(limits = c(0, 50), breaks = c(5, 15, 25, 35, 45))+
-  scale_y_continuous(limits = c(0, 60))
+  labs(title = "Histogram (n = 491)",
+       x = "DBH (m)", y = "Frequency") +
+  scale_x_continuous(limits = c(0, 0.5), breaks = c(0.05, 0.15, 0.25, 0.35, 0.45))+
+  scale_y_continuous(limits = c(0, 90))
 
 
-hist_LiDAR19 <- ggplot(data = df_LiDAR19, aes(x = DBHcm)) + geom_histogram(bins = 100) +
+hist_LiDAR18 <- ggplot(data = df_LiDAR18, aes(x = DBH, fill = cut(DBH, breaks = c(0,0.047,Inf),labels = c("<0.05 m", "\u2265 0.5 m")))) + geom_histogram(bins = 100) +
   theme_classic()+
-  labs(title = "Histogram (n = 809)",
-       x = "DBH (cm)", y = "Frequency") +
-  scale_x_continuous(limits = c(0, 50), breaks = c(5, 15, 25, 35, 45))+
-  scale_y_continuous(limits = c(0, 60))
+  labs(title = "Histogram (n = 807)",
+       x = "DBH (m)", y = "Frequency") +
+  scale_x_continuous(limits = c(0, 0.5), breaks = c(0.05, 0.15, 0.25, 0.35, 0.45))+
+  scale_y_continuous(limits = c(0, 90)) +
+  scale_fill_manual(name = 'DBH segmentation', values = c("tomato", "grey32"))
 
 
 
-### grid plots ----
+### Produce grid plot ----
 
-multiplot2 <- ggarrange(map_manual18,map_LiDAR19, 
-                       hist_manual18, hist_LiDAR19, 
-                       labels = c("A", "B", "C", "D"),
-                       ncol = 2, nrow = 2,
-                       common.legend = TRUE,
-                       legend = "right",
-                       widths = c(1,1),
-                       heights = c(2,1),
-                       align = "hv"
+multiplot <- ggarrange(map_manual18,map_LiDAR18, 
+                        hist_manual18, hist_LiDAR18, 
+                        labels = c("a", "b", "c", "d"),
+                        ncol = 2, nrow = 2,
+                        common.legend = TRUE,
+                        legend = "right",
+                        widths = c(1,1),
+                        heights = c(2,1),
+                        align = "hv"
 )
-multiplot2
+multiplot18
+
+if (!require(praise)) install.packages('praise')
+praise()
