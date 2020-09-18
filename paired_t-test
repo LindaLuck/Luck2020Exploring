@@ -1,0 +1,139 @@
+##########################################################################################
+##
+## PAIRED T-TEST COMPARING TREE COUNTS IN GRIDDED FIELD SITE
+## Author: Linda Luck 29 April 2020
+##
+##########################################################################################
+
+
+### House keeping ----
+## clean workspace
+rm(list=ls())
+
+## set working directory
+setwd(dir)
+
+## load libraries
+if (!require(PairedData)) install.packages('PairedData')
+if (!require(devtools)) install.packages('devtools')
+if (!require(dplyr)) install.packages('dplyr')
+if (!require(ggpubr)) install.packages('ggpubr')
+
+
+## load data
+df_10m <- read.csv(file = "raw/Litchie_grid_10m_2018_5cmDBH.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
+df_20m <- read.csv(file = "raw/Litchie_grid_20m_2018_5cmDBH.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
+
+
+## investigate data
+str(df_10m)
+str(df_20m)
+
+
+
+### Summary statistics ----
+
+## compare mean and SD for field and LiDAR counts - check for obvious differences
+group_by(df_10m, group) %>%
+  summarise(
+    count = n(),
+    mean = mean(trees, na.rm = TRUE),
+    sd = sd(trees, na.rm = TRUE)
+  )
+
+
+group_by(df_20m, group) %>%
+  summarise(
+    count = n(),
+    mean = mean(trees, na.rm = TRUE),
+    sd = sd(trees, na.rm = TRUE)
+  )
+
+# --> mean & SD very similar for both grids
+
+
+
+# Visualise data ----
+
+ggboxplot(df_10m, x = "group", y = "trees", 
+          color = "group", palette = c("#00AFBB", "#E7B800"),
+          order = c("field", "LiDAR"),
+          ylab = "n trees", xlab = "Groups") +
+		  ggtitle("10 m grid")
+
+
+ggboxplot(df_20m, x = "group", y = "trees", 
+          color = "group", palette = c("#00AFBB", "#E7B800"),
+          order = c("field", "LiDAR"),
+          ylab = "n trees", xlab = "Groups") +
+		  ggtitle("20 m grid")
+
+		  
+
+### Plot paired data ----
+## --> check for parallel distribution
+
+## 10m grid
+# Subset trees counted in field sruvey
+field_10m <- subset(df_10m,  group == "field", trees,
+                 drop = TRUE)
+
+# subset trees counted in LiDAR survey
+LiDAR_10m <- subset(df_10m,  group == "LiDAR", trees,
+                drop = TRUE)
+
+# Plot paired data
+pd_10m <- paired(field_10m, LiDAR_10m)
+plot(pd_10m, type = "profile") + theme_bw()
+
+
+## 20m grid
+# Subset trees counted in field sruvey
+field_20m <- subset(df_20m,  group == "field", trees,
+                drop = TRUE)
+
+# subset trees counted in LiDAR survey
+LiDAR_20m <- subset(df_20m,  group == "LiDAR", trees,
+                drop = TRUE)
+
+# Plot paired data
+pd_20m <- paired(field_20m, LiDAR_20m)
+plot(pd_20m, type = "profile") + theme_bw()
+
+
+### Check for normal distribution ----
+## (usually only necessary for sample size n < 30)
+## --> t-test can be used only when difference (d) is normally distributed
+
+## compute the difference
+d <- with(df_20m, 
+          trees[group == "field"] - trees[group == "LiDAR"])
+## Shapiro-Wilk normality test for the differences
+shapiro.test(d)
+
+# --> if p-value is greater than the significance level 0.05, then
+# --> the distribution of the differences (d) are not significantly different from normal distribution
+# --> I.e. we can assume the normality
+
+
+
+### Paired sample t-test ----
+
+## Compute t-test (data frame) 10 m grid
+res_10m <- t.test(trees ~ group, data = df_10m, paired = TRUE)
+res_10m 
+
+
+# --> If the p-value of the test is less than the significance level alpha = 0.05 
+# --> We can then reject null hypothesis and 
+# --> conclude that field counts ARE significantly different from LiDAR counts
+# --> e.g. p = 0.07247
+# --> null hypothesis accepted
+# --> Average tree count in field survey is not significantly different from average tree count in LiDAR survey with a p-value = 0.07247.
+
+
+## Compute t-test (data frame) 20 m grid
+res_20m <- t.test(trees ~ group, data = df_20m, paired = TRUE)
+res_20m
+
+# --> Average tree count in field survey is not significantly different from average tree count in LiDAR survey with a p-value = 0.0601.
