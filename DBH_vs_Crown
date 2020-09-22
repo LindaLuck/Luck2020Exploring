@@ -32,7 +32,7 @@ summary(df)
 
 
 
-### 1. Visualization of raw data and transform data if needed ----
+### 1. Visualise raw data ----
 
 
 ## histograms of variables
