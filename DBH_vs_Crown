@@ -11,29 +11,25 @@
 rm(list=ls())
 
 ## set working directory
-setwd("C:/Users/lluck/OneDrive - Charles Darwin University/PhD/Data/R scripts/PhD scripts/Allometric_relationships/")
+setwd(dir)
 
 ## load libraries
-#if (!require(chngpt)) install.packages('chngpt')
-library("ggplot2")
-library("car")
-library("caret")
-library("visreg")
-library("chngpt")
-library("RColorBrewer")
+if (!require(ggplot2)) install.packages('ggplot2')
+if (!require(car)) install.packages('car')
+if (!require(caret)) install.packages('caret')
+if (!require(visreg)) install.packages('visreg')
+if (!require(chngpt)) install.packages('chngpt')
+if (!require(RColorBrewer)) install.packages('RColorBrewer')
 
-### Load data ----
-df <- read.csv(file = "raw/Litchie_2019.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
 
-## investigate data (old school)
-head(df)
-dim(df)
+## load data
+df <- read.csv(file = "raw/Litchie_LiDAR_2018.csv", header = TRUE, strip.white = TRUE)#, row.names=1)
+
+
+## investigate data
 str(df)
 summary(df)
-names(df)
 
-## change DBH to cm
-df$DBHcm <- df$DBH*100
 
 
 ### 1. Visualization of raw data and transform data if needed ----
@@ -42,77 +38,91 @@ df$DBHcm <- df$DBH*100
 ## histograms of variables
 par(mfrow=c(1,2))
 hist(df$CrownArea) # outcome value, looks skewed
-hist(df$DBHcm) # predictor
+hist(df$DBH) # predictor
 # -> both heavily skewed
 
 ## compare log to raw outcome value
 df$LOG_CrownArea <- log(df$CrownArea)
-df$LOG_DBHcm <- log(df$DBHcm)
+df$LOG_DBH <- log(df$DBH)
 
 hist(df$CrownArea)
-hist(df$LOG_CrownArea) # -> looks better but need to investigate model performance with raw and log transform (below)
-hist(df$DBHcm)
-hist(df$LOG_DBHcm)
+hist(df$LOG_CrownArea)
+hist(df$DBH)
+hist(df$LOG_DBH)
 par(mfrow=c(1,1))
 
+# -> log transform looks better but need to investigate model performance with raw and log transform (below)
 
 ## raw data plot
-ggplot(df,aes(y=CrownArea,x=DBHcm)) + geom_point(color='blue') +
+ggplot(df,aes(y=CrownArea,x=DBH)) + geom_point(color='blue') +
   geom_smooth(method='loess') + 
   theme(text = element_text(size=16)) +
-  #labs(title = "DBH v crown area") + 
-  xlab("DBH")+ ylab("CrownArea") # + # focus on pre change point
-scale_x_continuous(limits=c(0,15)) +
+  xlab("DBH")+ ylab("CrownArea")
+
+# focus on pre change point
+ggplot(df,aes(y=CrownArea,x=DBH)) + geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  xlab("DBH")+ ylab("CrownArea") + 
+scale_x_continuous(limits=c(0,0.15)) +
   scale_y_continuous(limits=c(0,30))
-# -> data seems to fan out from DBH 10, could be threshold effect
+
+# -> data seems to fan out from DBH 0.1, could be threshold effect
 
 
 ## Log plot
-ggplot(df,aes(y=LOG_CrownArea,x=DBHcm))+ geom_point(color='blue') +
+ggplot(df,aes(y=LOG_CrownArea,x=DBH))+ geom_point(color='blue') +
   geom_smooth(method='loess') + 
   theme(text = element_text(size=16)) +
   labs(title = "DBH v log transformed crown area")+ xlab("DBH")+ ylab("log CrownArea")
-# -> looks less neat
+# -> terrible
 
 
 ## Log-log plot
-ggplot(df,aes(y=LOG_CrownArea,x=LOG_DBHcm))+ geom_point(color='blue') +
+ggplot(df,aes(y=LOG_CrownArea,x=LOG_DBH))+ geom_point(color='blue') +
   geom_smooth(method='loess') + 
   theme(text = element_text(size=16)) +
   labs(title = "log DBH v log transformed crown area")+ xlab("log DBH")+ ylab("log CrownArea")
-# -> doesn't look any better
+# -> not much better
 
 # -> raw plot seems to be best at highlighting the spread of crown for a given DBH, especially for trees above 10cm
 
 
 
-
 ### 2. Change point analysis ----
 
-m2 <- chngptm(formula.1=CrownArea ~ 1, formula.2=~DBHcm, data = df, type="segmented", family="gaussian")
-summary(m2)
-# -> test data shows a lot of spread between lower and upper confidence interval after change point
-plot(m2)
+## determine threshold
+# build model
+m2 <- chngptm(formula.1=CrownArea ~ 1, formula.2=~DBH, data = df, type="segmented", family="gaussian")
+
 # MLR test whether there is a change point 
-testresult_m2 <- chngpt.test(formula.null=CrownArea~1, formula.chngpt=~DBHcm, df, type="segmented", family="gaussian")
+testresult_m2 <- chngpt.test(formula.null=CrownArea~1, formula.chngpt=~DBH, df, type="segmented", family="gaussian")
 testresult_m2
 
-## get estimate of slope after threshold
+# > testresult_m2
+# 
+# Maximum of Likelihood Ratio Statistics
+# 
+# data:  df
+# Maximal statistic = 49.137, threshold = 0.099, p-value < 2.2e-16
+# alternative hypothesis: two-sided
+
+# -> there is a threshold at 0.099 m DBH (p<0.05)
+
+summary(m2)
+plot(m2)
+# get estimate of slope after threshold
 est_m2=lincomb(m2, comb=c(0,1,1), alpha=0.05); print(est_m2)
 
-# -> For every unit increase in DBH there is a 0.43 (95%CI 0.15 - 0.72, P < 0.001) unit increase in crown area until a change point at 10.3 cm DBH (95%CI 5.6 - 15.00)
-# -> from that change point the increase in crown area per unit DBH increases to 2.3 (95%CI 1.44 - 3.33, P < 0.001)
+# -> summary confirms increased spread of outcome after changepoint
 
-
-
-
-### 3. Model diagnostics ----
+### model diagnostics
 
 res <- residuals(m2)
-ggplot(df,aes(y=res,x=DBHcm))+ geom_point(color='blue') +
+ggplot(df,aes(y=res,x=DBH))+ geom_point(color='blue') +
   geom_smooth(method='loess') + 
   theme(text = element_text(size=16)) +
-  labs(title = "residuals change point m2")+ xlab("DBHcm")+ ylab("res") 
+  labs(title = "residuals change point m2")+ xlab("DBH")+ ylab("res") 
 # -> spread of rediuals increases with DBH
 
 qqnorm(res) 
@@ -120,36 +130,193 @@ qqline(res)
 # -> most residuals located on the line
 
 
+### how to interpet results 
+
+# > summary(m2)
+# Change point model threshold.type:  segmented 
+# 
+# Coefficients:
+#   est Std. Error*    (lower     upper)     p.value*
+#   (Intercept)    -1.954818   0.3973793 -2.733681  -1.175954 8.686606e-07
+# DBH            89.211597   8.8499435 71.865708 106.557486 6.740238e-24
+# (DBH-chngpt)+ 144.719556  33.0635513 79.914996 209.524117 1.203174e-05
+# 
+# Threshold:
+#   est Std. Error     (lower     upper)    p.value 
+# 0.09700000 0.02091837 0.05600000 0.13800000         NA 
+
+# > testresult_m2
+# 
+# Maximum of Likelihood Ratio Statistics
+# 
+# data:  df
+# Maximal statistic = 49.137, threshold = 0.099, p-value < 2.2e-16
+# alternative hypothesis: two-sided
+
+# > ## get estimate of slope after threshold
+# > est_m2=lincomb(m2, comb=c(0,1,1), alpha=0.05); print(est_m2)
+# 95%      95% 
+#   233.9312 165.8065 302.0558 
+
+# -> For every unit increase in DBH (0.01 m) there is a 0.89 (95%CI 0.72 - 1.06, P < 0.001) unit increase in crown area # converting to 0.01 m as unit (i.e. 1 cm) makes numnbers make more sense
+# -> Until a change point at 9.9 cm DBH (95\%CI 0.056 - 0.14, P < 0.001)
+# -> From that change point the increase in crown area per unit DBH increases to 2.34 (95%CI 1.66 - 3.02, P < 0.001)
+
+# -> HOWEVER, this package can't deal with heteroscedastic data - GLS can describe variance better
 
 
-### 4. Log model ----
 
-m2_log <- lm(LOG_CrownArea ~ DBH, data = df)
-summary(m2_log)
-# -> P<0.001 but R2 0.54 not great
-exp(cbind(exp_coeff = coef(m2_log), confint(m2_log))) # -> for use with logged outcome (but not predictor) - exponentiates CIs
-# -> pretty big 95%CI
+### 3. GLS (generalized least squares) with manual change point ----
+### http://www.pmean.com/08/PiecewiseLinear.html
+### https://www.flutterbys.com.au/stats/tut/tut8.2a.html
 
-par(mfrow=c(2,2))
-plot(m2_log)
-par(mfrow=c(1,1))
-# -> good pread of residuals; curve visible in fitted v resid though; no outliers outside Cook's distance
+## prepare data
+
+# categorical value for DBH: 0 = small, 1 = large, change point is previously established 9.9
+df$DBH_cat <- cut(df$DBH,
+              breaks = c(0, 0.099, Inf),
+              labels = c(0, 1))
+
+df$DBH_cat <- as.numeric(as.character(df$DBH_cat))
+str(df)
+
+# subtract change point from all DBHs to centre the variable
+df$DBH_centred <- df$DBH - 0.099
+
+# calculate interaction of cat and centred by multiplying
+df$DBH_IA <- df$DBH_cat * df$DBH_centred
+
+# exclude DBH zero as varFixed() does not work if 0
+df_no0 <- subset(df,DBH_centred!=0)
+dim(df)
+dim(df_no0)
+
+
+## GLS model selection
+if (!require(nlme)) install.packages('nlme')
+
+# compare models of differet variance structures
+modelglsvf <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                 weights = varFixed(~ DBH_centred))
+summary(modelglsvf)
+confint(modelglsvf)
+
+
+modelglsve <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                 weights = varExp(form=~DBH_centred))
+summary(modelglsve)
+confint(modelglsve)
+
+
+modelglsvp <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                 weights = varPower(form=~ DBH_centred))
+summary(modelglsvp)
+confint(modelglsvp)
+
+
+modelglsvc <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                 weights = varConstPower(form=~DBH_centred))
+summary(modelglsvc)
+confint(modelglsvc)
+
+
+modelglsvi <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                  weights = varIdent(form = ~1 | DBH_cat)) # varIdent allows variance to be different for each level of cat, i.e. change point
+summary(modelglsvi)
+confint(modelglsvi)
+
+
+# compare performance
+AIC(modelglsvf,modelglsve,modelglsvp,modelglsvc,modelglsvi) # exponential model ve has lowest AIC, followed by change point model vi
+
+confint(modelglsvf)
+confint(modelglsve) # also has smallest CI
+confint(modelglsvp)
+confint(modelglsvc)
+confint(modelglsvi) # second lowest CI
+
+
+# combine change point with best variance structure
+modelglscomb <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
+                 weights = varComb(varIdent(form = ~1 | DBH_cat),varExp(form=~DBH_centred)))
+AIC(modelglscomb)
+summary(modelglscomb)
+confint(modelglscomb)
+# AIC and CI furhter reduced
+
+### how to interpret
+
+# > summary(modelglscomb)
+# Generalized least squares fit by REML
+# Model: CrownArea ~ DBH_IA + DBH_centred 
+# Data: df_no0 
+# AIC      BIC   logLik
+# 3696.621 3724.736 -1842.31
+# 
+# Combination of variance functions: 
+#   Structure: Different standard deviations per stratum
+# Formula: ~1 | DBH_cat 
+# Parameter estimates:
+#   0        1 
+# 1.000000 1.822496 
+# Structure: Exponential of variance covariate
+# Formula: ~DBH_centred 
+# Parameter estimates:
+#   expon 
+# 0.1266221 
+# 
+# Coefficients:
+#   Value  Std.Error  t-value p-value
+# (Intercept) 6.835119 0.20813087 32.84049       0
+# DBH_IA      1.523265 0.21512971  7.08068       0
+# DBH_centred 0.885464 0.03549892 24.94341       0
+# 
+# Correlation: 
+#   (Intr) DBH_IA
+# DBH_IA      -0.327       
+# DBH_centred  0.963 -0.326
+# 
+# Standardized residuals:
+#   Min          Q1         Med          Q3         Max 
+# -2.36996071 -0.62792605 -0.09564059  0.51731275  5.62621447 
+# 
+# Residual standard error: 2.839751 
+# Degrees of freedom: 804 total; 801 residual
+
+# > confint(modelglscomb)
+# 2.5 %    97.5 %
+#   (Intercept) 6.4271901 7.2430481
+# DBH_IA      1.1016182 1.9449112
+# DBH_centred 0.8158877 0.9550409
+
+# -> before the chagne point for every unit increase in DBH there is a (DBH_centred) 0.88 increase in crown area (95\%CI 0.82 - 0.96)
+# -> after the chagne point for every unit increase in DBH there is a (DBH_centred + DBH_IA) 2.41 increase in crown area and the 95\%CI widens to 1.92 - 2.9
+
+# plot model
+if (!require(sjPlot)) install.packages('sjPlot')
+if (!require(sjmisc)) install.packages('sjmisc')
+plot_model(modelgls5, "pred", terms = c("DBH_centred"), show.data = TRUE)
 
 
 
+# 4. Plot effect
+if (!require(AICcmodavg)) install.packages('AICcmodavg')
 
-### 5. Plot effect ----
+# Generate new dataset which contains the explanatory variables you have in the lm()
+fit <- predict(modelglscomb, newdata = df)
+se <- predictSE.gls(modelglscomb, newdata = df)$se.fit
+preddata <- data.frame(df, fit=fit, se=se)
 
-visreg(m2, xvar="DBH", ylab="CrownArea", points=list(cex=1))
+# calculate the lower and upper 95% CI based on predictions
+critval <- 1.96 ## approx 95% CI
+preddata$upper <- preddata$fit + (critval * preddata$se)
+preddata$lower <- preddata$fit - (critval * preddata$se)
 
-visreg(m2_log, xvar="DBH", ylab="LOG_CrownArea", points=list(cex=1))
-# -> line doesn't really explain data points
+summary(preddata)
+str(preddata)
+names(preddata)
 
-
-
-### 6. Pretty plot ----
-
-## make colour pallette
+# make colour pallette
 outcome <- df$TreeHeight
 label <- "Tree height (m)"
 max <- max(outcome)
@@ -159,15 +326,19 @@ myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
 sc <- scale_colour_gradientn(colours = myPalette(100), limits=c(min, max))
 
 
-### plot results
-
-ggplot(data = df, aes(y = CrownArea, x = DBHcm, colour = outcome)) + geom_point() + sc +
+# plot model
+ggplot(data=preddata, aes(x=DBH, y=CrownArea)) +
+  geom_point(aes(color = outcome), size = 2) + sc +
+  geom_line(data=preddata,aes(y=fit)) +
+  geom_ribbon(data=preddata,aes(ymin=lower,ymax=upper),alpha=0.3)+
+  labs(x="DBH (m)", y="Crown Area"~(m^2), colour = label) + 
   theme_light() +
-  labs(x = "DBH (cm)", y = bquote('Crown area'~(m^2)), colour = label)
+  scale_x_continuous(limits = c(0,0.50), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0,160), expand = c(0, 0)) +# maybe not constrain y axis of CI is too wide
+  theme(aspect.ratio = 0.8, 
+        text=element_text(size=19))
 
+		
 
-# with curve
-ggplot(data = df, aes(y = CrownArea, x = DBHcm, colour = outcome)) + geom_point() + sc +
-  stat_smooth(method = "loess") +
-  theme_light() +
-  labs(x = "DBH (cm)", y = bquote('Crown area'~(m^2)), colour = label)
+if (!require(praise)) install.packages('praise')
+praise()
