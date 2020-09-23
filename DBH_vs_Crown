@@ -116,19 +116,6 @@ est_m2=lincomb(m2, comb=c(0,1,1), alpha=0.05); print(est_m2)
 
 # -> summary confirms increased spread of outcome after changepoint
 
-### model diagnostics
-
-res <- residuals(m2)
-ggplot(df,aes(y=res,x=DBH))+ geom_point(color='blue') +
-  geom_smooth(method='loess') + 
-  theme(text = element_text(size=16)) +
-  labs(title = "residuals change point m2")+ xlab("DBH")+ ylab("res") 
-# -> spread of rediuals increases with DBH
-
-qqnorm(res) 
-qqline(res)
-# -> most residuals located on the line
-
 
 ### how to interpet results 
 
@@ -162,13 +149,28 @@ qqline(res)
 # -> Until a change point at 9.9 cm DBH (95\%CI 0.056 - 0.14, P < 0.001)
 # -> From that change point the increase in crown area per unit DBH increases to 2.34 (95%CI 1.66 - 3.02, P < 0.001)
 
+
+### model diagnostics
+
+res <- residuals(m2)
+ggplot(df,aes(y=res,x=DBH))+ geom_point(color='blue') +
+  geom_smooth(method='loess') + 
+  theme(text = element_text(size=16)) +
+  labs(title = "residuals change point m2")+ xlab("DBH")+ ylab("res") 
+# -> spread of rediuals increases with DBH
+
+qqnorm(res) 
+qqline(res)
+# -> most residuals located on the line
+
+
 # -> HOWEVER, this package can't deal with heteroscedastic data - GLS can describe variance better
 
 
 
 ### 3. GLS (generalized least squares) with manual change point ----
 ### http://www.pmean.com/08/PiecewiseLinear.html
-### https://www.flutterbys.com.au/stats/tut/tut8.2a.html
+### https://www.flutterbys.com.au/stats/tut/tut8.2a.html # models listed at bottom of pages
 
 ## prepare data
 
@@ -179,6 +181,7 @@ df$DBH_cat <- cut(df$DBH,
 
 df$DBH_cat <- as.numeric(as.character(df$DBH_cat))
 str(df)
+# -> open df an check that cat changes at threshold
 
 # subtract change point from all DBHs to centre the variable
 df$DBH_centred <- df$DBH - 0.099
@@ -195,36 +198,39 @@ dim(df_no0)
 ## GLS model selection
 if (!require(nlme)) install.packages('nlme')
 
-# compare models of differet variance structures
+## compare models of differet variance structures
 modelglsvf <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
                  weights = varFixed(~ DBH_centred))
 summary(modelglsvf)
 confint(modelglsvf)
+# variance proportional to x the covariate
 
 
 modelglsve <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
                  weights = varExp(form=~DBH_centred))
 summary(modelglsve)
 confint(modelglsve)
+# variance proportional to the exponential of x multiplied by a constant
 
 
 modelglsvp <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
                  weights = varPower(form=~ DBH_centred))
 summary(modelglsvp)
 confint(modelglsvp)
-
+# variance proportional to the absolute value of x raised to a constant power
 
 modelglsvc <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
                  weights = varConstPower(form=~DBH_centred))
 summary(modelglsvc)
 confint(modelglsvc)
+# a variant on the power function
 
 
 modelglsvi <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0, 
-                  weights = varIdent(form = ~1 | DBH_cat)) # varIdent allows variance to be different for each level of cat, i.e. change point
+                  weights = varIdent(form = ~1 | DBH_cat)) # varIdent allows variance to be different for each level of cat, i.e. the change point
 summary(modelglsvi)
 confint(modelglsvi)
-
+# when A (DBH_cat) is a factor, variance is allowed to be different for each level (j) of the factor
 
 # compare performance
 AIC(modelglsvf,modelglsve,modelglsvp,modelglsvc,modelglsvi) # exponential model ve has lowest AIC, followed by change point model vi
@@ -242,7 +248,8 @@ modelglscomb <- gls(CrownArea ~ DBH_IA + DBH_centred, data=df_no0,
 AIC(modelglscomb)
 summary(modelglscomb)
 confint(modelglscomb)
-# AIC and CI furhter reduced
+# combination of two of the above
+# -> AIC and CI furhter reduced
 
 ### how to interpret
 
@@ -291,11 +298,6 @@ confint(modelglscomb)
 
 # -> before the chagne point for every unit increase in DBH there is a (DBH_centred) 0.88 increase in crown area (95\%CI 0.82 - 0.96)
 # -> after the chagne point for every unit increase in DBH there is a (DBH_centred + DBH_IA) 2.41 increase in crown area and the 95\%CI widens to 1.92 - 2.9
-
-# plot model
-if (!require(sjPlot)) install.packages('sjPlot')
-if (!require(sjmisc)) install.packages('sjmisc')
-plot_model(modelgls5, "pred", terms = c("DBH_centred"), show.data = TRUE)
 
 
 
