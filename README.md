@@ -39,6 +39,6 @@ This script supports Figure 6, the difference in tree counts in the manual and T
 This script produces Figure 7, comparing the DBH measured for individual trees in the manual and TLS survey.
 
 #### DBH_vs_Crown 
-This script produces figure 8, exploring the relationship between DBH and tree crown size.
+This script produces Figure 8, exploring the relationship between DBH and tree crown size.
 
 >_note: the working directory will need to be specified by the user_
