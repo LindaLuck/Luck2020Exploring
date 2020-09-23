@@ -33,10 +33,10 @@ R version 3.6.0
 This script produces Figure 5, a spatial distribution map and histogram for manual and TLS survey.
 
 #### paired_t-test
-This script supports the simluated grid cells of Figure 6. The t-test evaluates the statistical difference between the manual and TLS survey.
+This script supports Figure 6, the difference in tree counts in the manual and TLS survey in simulated grid cells. The t-test evaluates the statistical difference between the manual and TLS survey.
 
 #### DBH_field_vs_LiDAR
-This script produces Figure 7. It compares the DBH measured for individual trees in the manual and TLS survey.
+This script produces Figure 7, comparing the DBH measured for individual trees in the manual and TLS survey.
 
 #### DBH_vs_Crown 
 This script produces figure 8, exploring the relationship between DBH and tree crown size.
