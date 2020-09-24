@@ -145,9 +145,10 @@ est_m2=lincomb(m2, comb=c(0,1,1), alpha=0.05); print(est_m2)
 # 95%      95% 
 #   233.9312 165.8065 302.0558 
 
-# -> For every unit increase in DBH (0.01 m) there is a 0.89 (95%CI 0.72 - 1.06, P < 0.001) unit increase in crown area # converting to 0.01 m as unit (i.e. 1 cm) makes numnbers make more sense
-# -> Until a change point at 9.9 cm DBH (95\%CI 0.056 - 0.14, P < 0.001)
-# -> From that change point the increase in crown area per unit DBH increases to 2.34 (95%CI 1.66 - 3.02, P < 0.001)
+## -> ONLY CHANGE POINT WAS USED FORM THIS ANALYSIS
+# -> For every unit increase in DBH (1 m) there is a 89.21 (95%CI 72 - 106, P < 0.001) unit increase in crown area
+# -> Until a change point at 0.099 cm DBH (95\%CI 0.056 - 0.14, P < 0.001)
+# -> From that change point the increase in crown area per unit DBH increases to 234 (95%CI 166 - 302, P < 0.001)
 
 
 ### model diagnostics
@@ -257,8 +258,8 @@ confint(modelglscomb)
 # Generalized least squares fit by REML
 # Model: CrownArea ~ DBH_IA + DBH_centred 
 # Data: df_no0 
-# AIC      BIC   logLik
-# 3696.621 3724.736 -1842.31
+# AIC      BIC  logLik
+# 3678.2 3706.315 -1833.1
 # 
 # Combination of variance functions: 
 #   Structure: Different standard deviations per stratum
@@ -270,13 +271,13 @@ confint(modelglscomb)
 # Formula: ~DBH_centred 
 # Parameter estimates:
 #   expon 
-# 0.1266221 
+# 12.66221 
 # 
 # Coefficients:
-#   Value  Std.Error  t-value p-value
-# (Intercept) 6.835119 0.20813087 32.84049       0
-# DBH_IA      1.523265 0.21512971  7.08068       0
-# DBH_centred 0.885464 0.03549892 24.94341       0
+#   Value Std.Error  t-value p-value
+# (Intercept)   6.83512  0.208131 32.84049       0
+# DBH_IA      152.32647 21.512972  7.08068       0
+# DBH_centred  88.54643  3.549892 24.94341       0
 # 
 # Correlation: 
 #   (Intr) DBH_IA
@@ -285,19 +286,19 @@ confint(modelglscomb)
 # 
 # Standardized residuals:
 #   Min          Q1         Med          Q3         Max 
-# -2.36996071 -0.62792605 -0.09564059  0.51731275  5.62621447 
+# -2.36996067 -0.62792606 -0.09564058  0.51731275  5.62621443 
 # 
 # Residual standard error: 2.839751 
 # Degrees of freedom: 804 total; 801 residual
 
 # > confint(modelglscomb)
-# 2.5 %    97.5 %
-#   (Intercept) 6.4271901 7.2430481
-# DBH_IA      1.1016182 1.9449112
-# DBH_centred 0.8158877 0.9550409
+# 2.5 %     97.5 %
+# (Intercept)   6.42719   7.243048
+# DBH_IA      110.16182 194.491123
+# DBH_centred  81.58877  95.504087
 
-# -> before the chagne point for every unit increase in DBH there is a (DBH_centred) 0.88 increase in crown area (95\%CI 0.82 - 0.96)
-# -> after the chagne point for every unit increase in DBH there is a (DBH_centred + DBH_IA) 2.41 increase in crown area and the 95\%CI widens to 1.92 - 2.9
+# -> before the chagne point for every unit increase in DBH there is a (DBH_centred) 88.55 increase in crown area (95\%CI 81.56 - 95.50)
+# -> after the chagne point for every unit increase in DBH there is a (DBH_centred + DBH_IA) 240.87 increase in crown area and the 95\%CI widens to 191.75 - 290
 
 
 
