@@ -15,9 +15,9 @@ rm(list=ls())
 setwd(dir)
 
 ## load libraries
-(!require(ggplot2)) install.packages('ggplot2')
-(!require(car)) install.packages('car')
-(!require(visreg)) install.packages('visreg')
+if (!require(ggplot2)) install.packages('ggplot2')
+if (!require(car)) install.packages('car')
+if (!require(visreg)) install.packages('visreg')
 
 
 
